@@ -6,7 +6,7 @@ import datetime, math, os, time
 import numpy as np
 import json, sqlite3
 from sklearn.cross_validation import KFold
-from sklearn.metrics import mean_squared_error, explained_variance_score
+from sklearn.metrics import hamming_loss
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.linear_model import SGDClassifier
 import matplotlib.pyplot as plt
@@ -46,30 +46,26 @@ split_major_array = np.hsplit(major_array, 3)
 X_data = np.hstack((split_major_array[0], split_major_array[2]))
 y_data = np.ravel(split_major_array[1])
 
-error_rates = []
-variance_rates = []
+accuracy_rates = []
 kf = KFold(len(y_data), n_folds = 3, shuffle=False) #create cross validation model
-clf = KNeighborsClassifier()
+clf = KNeighborsClassifier(100)
 ctr = 0
 for train_index, test_index in kf:
     X_train, X_test = X_data[train_index], X_data[test_index]
     y_train, y_test = y_data[train_index], y_data[test_index]
     clf.fit(X_train, y_train)
     predicted = clf.predict(X_test)
-    error = mean_squared_error(y_test, predicted)
-    error_rates.append(error)
-    variance = explained_variance_score(y_test, predicted)
-    variance_rates.append(variance)
-    if ctr == 0:
-        #plt.plot(X_test.transpose()[0], predicted, 'b')
-        #plt.plot(X_test.transpose()[0], y_test, 'r')
-        #plt.axis([0, 1.5e9, -1, 30])
-        #plt.show()
+    accuracy = clf.score(X_test, y_test)
+    accuracy_rates.append(accuracy)
+
+    if ctr == -1:
+        plt.plot(X_test.transpose()[0], predicted, 'b')
+        plt.plot(X_test.transpose()[0], y_test, 'r')
+        plt.axis([0, 1.5e9, 0, 7])
+        plt.show()
         ctr += 1
 
-print("Mean(error_rates) = %.5f" % (np.mean(error_rates)))
-print("Mean(variance_rates) = %.5f" % (np.mean(variance_rates)))
-
+print("Mean(accuracy_rates) = %.5f" % (np.mean(accuracy_rates)))
 
 #account for base time
 #reverse hash lookup
@@ -92,14 +88,10 @@ for time_i in times:
             'beat': beat_mapper.get_key(beat_id),
             'type': type_mapper.get_key(clf.predict([time_i, beat_id])[0])
             }
-
         fut_week_crimes_list.append(temp_dict)
 fut_week_crimes["crimes"] = fut_week_crimes_list
 with open('future.json', 'w') as fl:
     json.dump(fut_week_crimes, fl)
-
-for key in type_mapper.key_to_hash:
-    print '{}'.format(key)
 
 print 'time to complete: %ds' % (time.time() - start_time)
 
