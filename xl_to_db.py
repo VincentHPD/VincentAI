@@ -28,29 +28,47 @@ def rows_in_xls(xls_file_path):
         sheet = wkbk.sheet_by_index(0)
         #fill up data list
         for row_ctr in range(1, sheet.nrows):
+            print row_ctr
             #capture a row
             dirty_row = sheet.row_slice(row_ctr)
 
             #grab date value, clean it up, and convert to eTime
             date_val = xlrd.xldate_as_tuple(dirty_row[0].value, wkbk.datemode)
             date_in_proper_tuple = time.strptime(str(date_val), "(%Y, %m, %d, 0, 0, 0)")
-            date_in_sec = time.mktime(date_in_proper_tuple)
 
-            if date_in_sec < 0.0: #toss out any bad data, we can't have a date whose value is less than 0
-                continue
-
+            year, month, mday, wday = date_in_proper_tuple.tm_year, date_in_proper_tuple.tm_mon, date_in_proper_tuple.tm_mday, date_in_proper_tuple.tm_wday
             #create and fill up a new inner list, this list will be apended to the larger list, all_rows.
             clean_row = [item.value for item in dirty_row]
+
+            #we need some of the data from the row before we overwrite any data
+            offense_type, beat = clean_row[2], clean_row[3]
+
             clean_row.pop(0) #remove the old value for the date
-            clean_row.insert(0, date_in_sec) #add in the clean value of date in eTime
+            clean_row.insert(0, year) #add in the year as the first value in the list
+            clean_row.pop(1)
+            clean_row.insert(1, month)
+            clean_row.pop(2)
+            clean_row.insert(2, mday)
+            clean_row.pop(3)
+            clean_row.insert(3, wday)
+            clean_row.pop(4)
+            clean_row.insert(4, offense_type)
+            clean_row.pop(5)
+            clean_row.insert(5, beat)
+
+            try:
+                [clean_row.pop(i) for i in range(6, len(clean_row))]
+            except:
+                pass
 
             #if beat and offense type are valid return the crime instance
-            if checker.valid_type(clean_row[2]) and checker.valid_beat(clean_row[3]):
+            if checker.valid_type(offense_type) and checker.valid_beat(beat):
                 all_rows.append(clean_row) #add this list to the larger list
 
         return all_rows
-    except:
+    except Exception as e:
         #if the excel file can't be opened return a blank list
+        print str(e)
         return []
 
 def multiprocessing_file_reader(file_names, n_cores):
@@ -97,23 +115,18 @@ db_con = sqlite3.connect('crime_records.db')
 
 cur = db_con.cursor()
 
-cur.execute('CREATE TABLE HPDCrimes(eTime REAL, OffenseType TEXT, Beat TEXT, Premise TEXT, BlockRange TEXT, StreetName TEXT, StreetType TEXT, NumOffenses INTEGER)')
+cur.execute('CREATE TABLE HPDCrimes(Year INTEGER, Month INTEGER, MDay INTEGER, WDay INTEGER, OffenseType TEXT, Beat TEXT)')
 
 for crime in data:
-    if len(crime) < 10:
-        for i in range(len(crime), 9):
-            crime.append('')
-        crime.insert(9, 1)
-    elif type(crime[9]) != float and type(crime[9]) != int:
-        crime.pop(9)
-        crime.insert(9, 1)
     try:
-        cur.execute('INSERT INTO HPDCrimes VALUES(?, ?, ?, ?, ?, ?, ?, ?)', (crime[0], crime[2], crime[3], crime[4], crime[5], crime[6], crime[7], crime[9]))
+        cur.execute('INSERT INTO HPDCrimes VALUES(?, ?, ?, ?, ?, ?)', (crime[0], crime[1], crime[2], crime[3], crime[4], crime[5]))
+        print ' executing sql writing {} {} {} {} {} {}'.format(crime[0], crime[1], crime[2], crime[3], crime[4], crime[5])
     except:
         pass
 
 db_con.commit() #save to database
 db_con.close() #close connection
+
 
 print 'time to complete: %ds' % (time.time() - start_time)
 

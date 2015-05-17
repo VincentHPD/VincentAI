@@ -6,9 +6,7 @@ import datetime, math, os, time
 import numpy as np
 import json, sqlite3
 from sklearn.cross_validation import KFold
-from sklearn.metrics import hamming_loss
 from sklearn.neighbors import KNeighborsClassifier
-from sklearn.linear_model import SGDClassifier
 import matplotlib.pyplot as plt
 import vincent
 start_time = time.time()
@@ -35,7 +33,7 @@ for ctr, crime in enumerate(db_cur.fetchall()):
     temp_list.append(crime[0] - base_time)
     #convert the OffenseTypes and Beats to hashes, use a scaling coefficient
     temp_list.append(type_mapper.get_hash(crime[1]))
-    temp_list.append(beat_mapper.get_hash(crime[2]) * 1e5)
+    temp_list.append(beat_mapper.get_hash(crime[2]))
     #append this temporary list to the main list which stores all the data
     #print('{} {} {}'.format(crime[0], crime[1], crime[2]))
     all_data_from_sql.append(temp_list)
@@ -46,9 +44,13 @@ split_major_array = np.hsplit(major_array, 3)
 X_data = np.hstack((split_major_array[0], split_major_array[2]))
 y_data = np.ravel(split_major_array[1])
 
+#normalize data
+#X_data = preprocessing.scale(X_data)
+#y_data = preprocessing.scale(y_data)
+
 accuracy_rates = []
 kf = KFold(len(y_data), n_folds = 3, shuffle=False) #create cross validation model
-clf = KNeighborsClassifier(100)
+clf = KNeighborsClassifier(5)
 ctr = 0
 for train_index, test_index in kf:
     X_train, X_test = X_data[train_index], X_data[test_index]
@@ -64,6 +66,8 @@ for train_index, test_index in kf:
         plt.axis([0, 1.5e9, 0, 7])
         plt.show()
         ctr += 1
+
+clf.fit(X_data[:int(len(y_data)*.7)], y_data[:int(len(y_data)*.7)])
 
 print("Mean(accuracy_rates) = %.5f" % (np.mean(accuracy_rates)))
 
@@ -96,3 +100,7 @@ with open('future.json', 'w') as fl:
 print 'time to complete: %ds' % (time.time() - start_time)
 
 
+
+
+
+yahoo.com
