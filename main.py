@@ -40,8 +40,8 @@ y_data = np.ravel(split_major_array[5])
 
 accuracy_rates = []
 kf = KFold(len(y_data), n_folds = 3, shuffle=False) #create cross validation model
-clf = KNeighborsClassifier(5)
-ctr = 0
+clf = KNeighborsClassifier(10)
+
 for train_index, test_index in kf:
     X_train, X_test = X_data[train_index], X_data[test_index]
     y_train, y_test = y_data[train_index], y_data[test_index]
@@ -50,18 +50,10 @@ for train_index, test_index in kf:
     accuracy = clf.score(X_test, y_test)
     accuracy_rates.append(accuracy)
 
-    if ctr == 0:
-        plt.plot(X_test.transpose()[0], predicted, 'b')
-        plt.plot(X_test.transpose()[0], y_test, 'r')
-        plt.axis([0, 1.5e9, 0, 7])
-        plt.show()
-        ctr += 1
-
 clf.fit(X_data[:int(len(y_data)*.7)], y_data[:int(len(y_data)*.7)])
 
 print("Mean(accuracy_rates) = %.5f" % (np.mean(accuracy_rates)))
 
-#reverse hash lookup
 
 #predictions for the next week
 
@@ -80,7 +72,7 @@ for time_i in times:
     mday = time.localtime(time_i).tm_mday
     wday = time.localtime(time_i).tm_wday
     for beat_id in beat_mapper.hash_to_key:
-
+        #reverse hash lookup to display strings for beats and types of crimes
         temp_dict = {
             'date' : time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time_i)),
             'beat': beat_mapper.get_key(beat_id),
