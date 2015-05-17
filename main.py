@@ -26,6 +26,7 @@ all_data_from_sql = []
 for crime in db_cur.fetchall():
     temp_list = []
     temp_list.extend([crime[0], crime[1], crime[2], crime[3]])
+    print '{} {} {} {} {} {}'.format(crime[0], crime[1], crime[2], crime[3], crime[4], crime[5])
     #convert the OffenseTypes and Beats to hashes, use a scaling coefficient
     temp_list.append(beat_mapper.get_hash(crime[4]))
     temp_list.append(type_mapper.get_hash(crime[5]))

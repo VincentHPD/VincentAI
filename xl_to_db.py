@@ -28,7 +28,6 @@ def rows_in_xls(xls_file_path):
         sheet = wkbk.sheet_by_index(0)
         #fill up data list
         for row_ctr in range(1, sheet.nrows):
-            print row_ctr
             #capture a row
             dirty_row = sheet.row_slice(row_ctr)
 
@@ -62,7 +61,7 @@ def rows_in_xls(xls_file_path):
                 pass
 
             #if beat and offense type are valid return the crime instance
-            if checker.valid_type(offense_type) and checker.valid_beat(beat):
+            if checker.valid_type(offense_type) and checker.valid_beat(beat) and checker.valid_year(year):
                 all_rows.append(clean_row) #add this list to the larger list
 
         return all_rows

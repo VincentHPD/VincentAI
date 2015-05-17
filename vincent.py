@@ -25,6 +25,8 @@ class ValidData():
         self.types = ["Aggravated Assault", "Auto Theft", "Burglary", "Murder", "Rape", "Robbery", "Theft"]
         self.beat_pattern = '\d?\d[A-Z]\d{2}' #checks for a valid beat pattern. Which is 1-2 digits followed by an uppercase letter and finally followed by 2 digits
         self.beat_matcher = re.compile(self.beat_pattern)
+        self.earliest_year = 2010
+        self.latest_year = 2015
 
     def valid_type(self, p_type):
         """ If p_type is a valid type; return True. Return False otherwise. """
@@ -39,3 +41,11 @@ class ValidData():
             return True
         else:
             return False
+
+    def valid_year(self, p_year):
+        """ Pass it the year the date is from and it will return True if that's a possible year"""
+        if p_year >= self.earliest_year and p_year <= self.latest_year:
+            return True
+        else:
+            return False
+
