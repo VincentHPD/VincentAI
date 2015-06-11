@@ -48,4 +48,3 @@ class ValidData():
             return True
         else:
             return False
-
