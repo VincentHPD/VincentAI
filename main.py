@@ -35,6 +35,7 @@ for crime in db_cur.fetchall():
     temp_list.append(type_mapper.get_hash(crime[5]))
     #append this temporary list to the main list which stores all the data
     all_data_from_sql.append(temp_list)
+db_con.close()
 
 major_array = np.vstack(all_data_from_sql)
 split_major_array = np.hsplit(major_array, 6)
