@@ -37,10 +37,24 @@ for crime in db_cur.fetchall():
     all_data_from_sql.append(temp_list)
 db_con.close()
 
-major_array = np.vstack(all_data_from_sql)
-split_major_array = np.hsplit(major_array, 6)
+#convert the nested lists into a numpy array
+all_data_from_sql = np.vstack(all_data_from_sql)
 
-X_data = np.hstack((split_major_array[0], split_major_array[1], split_major_array[2], split_major_array[3], split_major_array[4]))
+#we have to find some information such as the earliest and latest year, and hashes in mapper objects
+earliest_year = all_data_from_sql[:, 0].min()
+latest_year = all_data_from_sql[:, 0].max()
+beat_mapper_hashes = beat_mapper.hash_to_key.keys()
+type_mapper_hashes = type_mapper.hash_to_key.keys()
+#print "{} {} {} {}".format(earliest_year, latest_year, beat_mapper_hashes, type_mapper_hashes)
+
+#create an array to store all possible incidences of
+
+"""
+major_array = np.vstack(all_data_from_sql)
+split_major_array = np.hsplit(major_array, len(major_array[0]))
+
+#excluding year from dataset
+X_data = np.hstack((split_major_array[1], split_major_array[2], split_major_array[3], split_major_array[4]))
 y_data = np.ravel(split_major_array[5])
 
 #create feature scaler
@@ -49,8 +63,6 @@ X_data_scaled = scaler.fit_transform(X_data)
 
 accuracy_rates = []
 kf = KFold(len(y_data), n_folds = 3, shuffle=False) #create cross validation model
-clf = SGDClassifier(alpha=0.000001, loss='log', fit_intercept = False, shuffle=False)
-#clf = KNeighborsClassifier(10)
 
 for train_index, test_index in kf:
     X_train, X_test = X_data_scaled[train_index], X_data_scaled[test_index]
@@ -77,25 +89,6 @@ times = [] #stores the normalized time in seconds of each day for the following 
 for i in range(7):
     times.append(time.time() + i*86400)
 
-#create a dictionary to store future crimes
-fut_week_crimes = dict()
-
-fut_week_crimes_list = []
-for time_i in times:
-    year = time.localtime(time_i).tm_year
-    month = time.localtime(time_i).tm_mon
-    mday = time.localtime(time_i).tm_mday
-    wday = time.localtime(time_i).tm_wday
-    for beat_id in beat_mapper.hash_to_key:
-        #reverse hash lookup to display strings for beats and types of crimes
-        temp_dict = {
-            'date' : time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time_i)),
-            'beat': beat_mapper.get_key(beat_id),
-            'type': type_mapper.get_key(clf.predict([year, month, mday, wday, beat_id])[0])
-            }
-        fut_week_crimes_list.append(temp_dict)
-fut_week_crimes["crimes"] = fut_week_crimes_list
-with open('future.json', 'w') as fl:
-    json.dump(fut_week_crimes, fl)
 
 print 'time to complete: %ds' % (time.time() - start_time)
+"""
