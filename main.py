@@ -69,13 +69,17 @@ for row in all_data_from_sql[:, :3]:
 beat_mapper_hashes = beat_mapper.hash_to_key.keys()
 type_mapper_hashes = type_mapper.hash_to_key.keys()
 
-print("{} {} {}".format(earliest_year, earliest_month, earliest_day))
-print("{} {} {}".format(latest_year, latest_month, latest_day))
-print("{} {}".format(beat_mapper_hashes, type_mapper_hashes))
+#print("{} {} {}".format(earliest_year, earliest_month, earliest_day))
+#print("{} {} {}".format(latest_year, latest_month, latest_day))
+#print("{} {}".format(beat_mapper_hashes, type_mapper_hashes))
 
 ###_###
 
 #create an array to store all possible incidences of crime whther they occurred or not
+start_date, end_date = (pd.datetime(earliest_year, earliest_month, earliest_day), pd.datetime(latest_year, latest_month, latest_day))
+range_dates = pd.date_range(start_date, end_date, freq='D')
+
+data_frame = pd.DataFrame()
 
 """
 split_major_array = np.hsplit(major_array, len(major_array[0]))
@@ -116,6 +120,6 @@ times = [] #stores the normalized time in seconds of each day for the following 
 for i in range(7):
     times.append(time.time() + i*86400)
 
+"""
 
 print 'time to complete: %ds' % (time.time() - start_time)
-"""

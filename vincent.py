@@ -44,6 +44,7 @@ class ValidData():
 
     def valid_year(self, p_year):
         """ Pass it the year the date is from and it will return True if that's a possible year"""
+        #TODO make this dynamic by allowing it to know the earliest and latest years without being explicitly told
         if p_year >= self.earliest_year and p_year <= self.latest_year:
             return True
         else:
