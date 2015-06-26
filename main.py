@@ -21,8 +21,7 @@ beat_mapper = vincent.Mapper()
 db_con = sqlite3.connect(crime_database_file)
 db_cur = db_con.cursor()
 db_cur.execute('SELECT Year INTEGER, Month INTEGER, MDay INTEGER, WDay INTEGER, Beat TEXT, OffenseType TEXT FROM HPDCrimes ORDER BY Year ASC')
-
-crime_dicts = []
+crime_dicts = {} 
 for crime in db_cur.fetchall():
     (year, month, m_day, w_day) = (crime[0], crime[1], crime[2], crime[3])
     #convert the OffenseTypes and Beats to hashes
@@ -34,12 +33,13 @@ for crime in db_cur.fetchall():
 	    'beat_hash' : beat_hash,
 	    'type_hash' : type_hash,
 	    'chance' : chance}
-    crime_dicts.append(temp_dict)
+    crime_key = '{}-{}-{}-{}-{}'.format(year, month, m_day, beat_hash, type_hash)
+    crime_dicts.update({crime_key : temp_dict})
 db_con.close()
 
 #find the earliest and latest datetime objects
-crime_dates = [d['date'] for d in crime_dicts]
-sorted_crime_dates = crime_dates.sorted()
+all_crime_dates = [crime_dicts[key]['date'] for key in crime_dicts]
+sorted_crime_dates = sorted(all_crime_dates)
 #find all of the hashes for beats and types of crimes
 beat_mapper_hashes = beat_mapper.hash_to_key.keys()
 type_mapper_hashes = type_mapper.hash_to_key.keys()
@@ -48,12 +48,29 @@ type_mapper_hashes = type_mapper.hash_to_key.keys()
 start_date, end_date = sorted_crime_dates[0], sorted_crime_dates[-1] 
 range_dates = pd.date_range(start_date, end_date, freq='D')
 
+no_crime_dicts = {} #stores entries for combinations where no crimes occured
+#find all combinations where a crime didn't occur
 for date_ in range_dates:
 	for beat in beat_mapper_hashes:
 		for crime_type in type_mapper_hashes:
-			
+			temp_key = '{}-{}-{}-{}-{}'.format(date_.year, date_.month, date_.day, beat, crime_type)
+			temp_dict = {temp_key : {'date' : date_, 'beat_hash' : beat, 'type_hash' : crime_type, 'chance' : 1.0 } } 
+			#check to see if this combination already has a crime associated
+			if not crime_dicts.has_key(temp_key):
+				#if not, update it to reflect no crime occured in that combination and add it as a no crime occurrence
+				temp_dict[temp_key]['chance'] = 0.0
+				no_crime_dicts.update(temp_dict)
+#combine the data of all crime and no-crime occurences
+major_data_dict = crime_dicts.copy()
+major_data_dict.update(no_crime_dicts)
+
+#DEBUG
+"""for key in major_data_dict.keys()[:50]:
+	print('{} {} {} {}'.format(major_data_dict[key]['date'], beat_mapper.get_key(major_data_dict[key]['beat_hash']),
+		type_mapper.get_key(major_data_dict[key]['type_hash']), major_data_dict[key]['chance']))
 """
 
+"""
 split_major_array = np.hsplit(major_array, len(major_array[0]))
 
 #excluding year from dataset
