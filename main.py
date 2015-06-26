@@ -7,10 +7,7 @@ import numpy as np
 import pandas as pd
 import json, sqlite3
 from sklearn.preprocessing import StandardScaler
-from sklearn.cross_validation import KFold
-from sklearn.neighbors import KNeighborsClassifier
 from sklearn.linear_model import SGDClassifier
-from sklearn.metrics import f1_score
 import matplotlib.pyplot as plt
 import vincent
 start_time = time.time()
@@ -25,63 +22,38 @@ db_con = sqlite3.connect(crime_database_file)
 db_cur = db_con.cursor()
 db_cur.execute('SELECT Year INTEGER, Month INTEGER, MDay INTEGER, WDay INTEGER, Beat TEXT, OffenseType TEXT FROM HPDCrimes ORDER BY Year ASC')
 
-all_data_from_sql = []
-
+crime_dicts = []
 for crime in db_cur.fetchall():
-    temp_list = []
-    temp_list.extend([crime[0], crime[1], crime[2], crime[3]])
-    #DEBUG print '{} {} {} {} {} {}'.format(crime[0], crime[1], crime[2], crime[3], crime[4], crime[5])
-    #convert the OffenseTypes and Beats to hashes, use a scaling coefficient
-    temp_list.append(beat_mapper.get_hash(crime[4]))
-    temp_list.append(type_mapper.get_hash(crime[5]))
-    #append this temporary list to the main list which stores all the data
-    all_data_from_sql.append(temp_list)
+    (year, month, m_day, w_day) = (crime[0], crime[1], crime[2], crime[3])
+    #convert the OffenseTypes and Beats to hashes
+    beat_hash = beat_mapper.get_hash(crime[4])
+    type_hash = type_mapper.get_hash(crime[5])
+    chance = 1.0 #since we have a record of this crime we know the probability was 1.0 (target value) 
+    temp_dict = { 
+	    'date' : pd.datetime(year, month, m_day),
+	    'beat_hash' : beat_hash,
+	    'type_hash' : type_hash,
+	    'chance' : chance}
+    crime_dicts.append(temp_dict)
 db_con.close()
 
-#convert the nested lists into a numpy array
-all_data_from_sql = np.asarray(all_data_from_sql)
-
-###find earliest and latest date, and hashes in mapper objects###
-earliest_year = all_data_from_sql[:, 0].min()
-#find the earliest month (1-12)
-earliest_month = 1000 #setting a high default value intentionally
-for row in all_data_from_sql[:, :2]:
-    if (row[0] == earliest_year) and (row[1] < earliest_month):
-        earliest_month = row[1]
-#find the earliest day (1-31) within the earliest month within the earliest year
-earliest_day = 50 #setting a high default value intentionally
-for row in all_data_from_sql[:, :3]:
-    if (row[0] == earliest_year) and (row[1] == earliest_month) and (row[2] < earliest_day):
-        earliest_day = row[2]
-
-latest_year = all_data_from_sql[:, 0].max()
-latest_month = 0 #setting a low default value intentionally
-#find the latest month (1-12) within the latest year
-for row in all_data_from_sql[:, :2]:
-    if (row[0] == latest_year) and (row[1] > latest_month):
-        latest_month = row[1]
-#find the latest day (1-31) within the latest month within the latest year
-latest_day = 0 #setting a low default value intentionally
-for row in all_data_from_sql[:, :3]:
-    if (row[0] == latest_year) and (row[1] == latest_month) and (row[2] > latest_day):
-        latest_day = row[2]
-
+#find the earliest and latest datetime objects
+crime_dates = [d['date'] for d in crime_dicts]
+sorted_crime_dates = crime_dates.sorted()
+#find all of the hashes for beats and types of crimes
 beat_mapper_hashes = beat_mapper.hash_to_key.keys()
 type_mapper_hashes = type_mapper.hash_to_key.keys()
 
-#print("{} {} {}".format(earliest_year, earliest_month, earliest_day))
-#print("{} {} {}".format(latest_year, latest_month, latest_day))
-#print("{} {}".format(beat_mapper_hashes, type_mapper_hashes))
-
-###_###
-
-#create an array to store all possible incidences of crime whther they occurred or not
-start_date, end_date = (pd.datetime(earliest_year, earliest_month, earliest_day), pd.datetime(latest_year, latest_month, latest_day))
+#create an array to store all possible incidences of crime whether they occurred or not
+start_date, end_date = sorted_crime_dates[0], sorted_crime_dates[-1] 
 range_dates = pd.date_range(start_date, end_date, freq='D')
 
-data_frame = pd.DataFrame()
-
+for date_ in range_dates:
+	for beat in beat_mapper_hashes:
+		for crime_type in type_mapper_hashes:
+			
 """
+
 split_major_array = np.hsplit(major_array, len(major_array[0]))
 
 #excluding year from dataset
