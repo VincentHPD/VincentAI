@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import json, sqlite3
 from sklearn.preprocessing import StandardScaler
-from sklearn.linear_model import SGDClassifier
+from sklearn.linear_model import SGDRegressor
 import matplotlib.pyplot as plt
 import vincent
 start_time = time.time()
@@ -70,6 +70,24 @@ major_data_dict.update(no_crime_dicts)
 		type_mapper.get_key(major_data_dict[key]['type_hash']), major_data_dict[key]['chance']))
 """
 
+#make a nested list containing all of the data
+xy_list = []
+for key in major_data_dict:
+	#exclude year and extract day of week
+	month, m_day, w_day = major_data_dict[key]['date'].month, major_data_dict[key]['date'].day, major_data_dict[key]['date'].weekday()
+	beat_hash = major_data_dict[key]['beat_hash']
+	type_hash = major_data_dict[key]['type_hash']
+	chance = major_data_dict[key]['chance']
+	xy_list.append( [month, m_day, w_day, beat_hash, type_hash, chance] )
+print xy_list[:5]
+#make the numpy array of the data
+xy_array = np.array(xy_list)
+print xy_array[:5]
+#seperate the features from the target to make X and y
+split_xy_array = np.hsplit(xy_array, len(xy_array[0]))
+X_data = np.hstack( (split_xy_array[0], split_xy_array[1], split_xy_array[2], split_xy_array[3], split_xy_array[4]) )
+y_data = np.ravel(split_xy_array[5])
+print '{} {}'.format(X_data[:5], y_data[:5])
 """
 split_major_array = np.hsplit(major_array, len(major_array[0]))
 
