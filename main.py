@@ -8,7 +8,9 @@ import pandas as pd
 import json, sqlite3
 from sklearn.preprocessing import StandardScaler
 from sklearn.cross_validation import KFold
-from sklearn.linear_model import LinearRegression 
+from sklearn.linear_model import LinearRegression
+from sklearn.learning_curve import learning_curve
+from sklearn.decomposition import PCA
 import matplotlib.pyplot as plt
 import vincent
 start_time = time.time()
@@ -22,14 +24,14 @@ beat_mapper = vincent.Mapper()
 db_con = sqlite3.connect(crime_database_file)
 db_cur = db_con.cursor()
 db_cur.execute('SELECT Year INTEGER, Month INTEGER, MDay INTEGER, WDay INTEGER, Beat TEXT, OffenseType TEXT FROM HPDCrimes ORDER BY Year ASC')
-crime_dicts = {} 
+crime_dicts = {}
 for crime in db_cur.fetchall():
     (year, month, m_day, w_day) = (crime[0], crime[1], crime[2], crime[3])
     #convert the OffenseTypes and Beats to hashes
     beat_hash = beat_mapper.get_hash(crime[4])
     type_hash = type_mapper.get_hash(crime[5])
-    chance = 1.0 #since we have a record of this crime we know the probability was 1.0 (target value) 
-    temp_dict = { 
+    chance = 1.0 #since we have a record of this crime we know the probability was 1.0 (target value)
+    temp_dict = {
 	    'date' : pd.datetime(year, month, m_day),
 	    'beat_hash' : beat_hash,
 	    'type_hash' : type_hash,
@@ -46,7 +48,7 @@ beat_mapper_hashes = beat_mapper.hash_to_key.keys()
 type_mapper_hashes = type_mapper.hash_to_key.keys()
 
 #create an array to store all possible incidences of crime whether they occurred or not
-start_date, end_date = sorted_crime_dates[0], sorted_crime_dates[-1] 
+start_date, end_date = sorted_crime_dates[0], sorted_crime_dates[-1]
 range_dates = pd.date_range(start_date, end_date, freq='D')
 
 no_crime_dicts = {} #stores entries for combinations where no crimes occured
@@ -55,7 +57,7 @@ for date_ in range_dates:
 	for beat in beat_mapper_hashes:
 		for crime_type in type_mapper_hashes:
 			temp_key = '{}-{}-{}-{}-{}'.format(date_.year, date_.month, date_.day, beat, crime_type)
-			temp_dict = {temp_key : {'date' : date_, 'beat_hash' : beat, 'type_hash' : crime_type, 'chance' : 1.0 } } 
+			temp_dict = {temp_key : {'date' : date_, 'beat_hash' : beat, 'type_hash' : crime_type, 'chance' : 1.0 } }
 			#check to see if this combination already has a crime associated
 			if not crime_dicts.has_key(temp_key):
 				#if not, update it to reflect no crime occured in that combination and add it as a no crime occurrence
@@ -113,19 +115,40 @@ regr.fit(X_data_scaled[:int(len(y_data)*.7)], y_data[:int(len(y_data)*.7)])
 print("Mean(accuracy_rates) = %.5f" % (np.mean(accuracy_rates)))
 
 """
-#find and print the f1 score
-fsco = f1_score(y_data, clf.predict(X_data_scaled), pos_label = None, average = None) #returns an f1 score for each class respectively, doesn't compute a mean f1score
-print("fscores for respective classes are: ")
-for i in type_mapper.hash_to_key:
-    print("{0}: {1}".format( type_mapper.get_key(i), fsco[i]) )
+#plotting learning curves
+plt.figure()
+plt.title('Learning Curves')
+plt.xlabel('Training examples')
+plt.ylabel('Score')
+train_sizes, train_scores, test_scores = learning_curve(regr, X_data_scaled, y_data, train_sizes=np.array([.1,.2,.5,.8,.99]), cv=kf)
+train_scores_mean = np.mean(train_scores, axis=1)
+train_scores_std = np.std(train_scores, axis=1)
+test_scores_mean = np.mean(test_scores, axis=1)
+test_scores_std = np.std(test_scores, axis=1)
+plt.grid()
+plt.fill_between(train_sizes, train_scores_mean - train_scores_std, train_scores_mean + train_scores_std, alpha=0.1, color="r")
+plt.fill_between(train_sizes, test_scores_mean - test_scores_std, test_scores_mean + test_scores_std, alpha=0.1, color="g")
+plt.plot(train_sizes, train_scores_mean, 'o-', color="r", label="Training score")
+plt.plot(train_sizes, test_scores_mean, 'o-', color="g", label="Cross-validation score")
+plt.legend(loc="best")
+plt.show()
+"""
 
-#predictions for the next week
-
-#find the current epoch time
-times = [] #stores the normalized time in seconds of each day for the following days
-for i in range(7):
-    times.append(time.time() + i*86400)
-
+"""
+#plotting
+pca = PCA(n_components=1)
+reduc_x = pca.fit_transform(X_data_scaled)
+reduc_x = np.ravel(reduc_x)
+plt.figure(1)
+plt.subplot(1, 1, 1)
+print '{} {}'.format(reduc_x, y_data)
+plt.plot(reduc_x, y_data, 'ro')
+plt.ylim([-.1, 1.1])
+plt.xlim([-3, 3])
+plt.title("Vincent")
+plt.xlabel('reduced feature space')
+plt.ylabel('chance')
+plt.show()
 """
 
 print 'time to complete: %ds' % (time.time() - start_time)
