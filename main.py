@@ -7,7 +7,8 @@ import numpy as np
 import pandas as pd
 import json, sqlite3
 from sklearn.preprocessing import StandardScaler
-from sklearn.linear_model import SGDRegressor
+from sklearn.cross_validation import KFold
+from sklearn.linear_model import LinearRegression 
 import matplotlib.pyplot as plt
 import vincent
 start_time = time.time()
@@ -79,41 +80,39 @@ for key in major_data_dict:
 	type_hash = major_data_dict[key]['type_hash']
 	chance = major_data_dict[key]['chance']
 	xy_list.append( [month, m_day, w_day, beat_hash, type_hash, chance] )
-print xy_list[:5]
+
 #make the numpy array of the data
 xy_array = np.array(xy_list)
-print xy_array[:5]
+
 #seperate the features from the target to make X and y
 split_xy_array = np.hsplit(xy_array, len(xy_array[0]))
 X_data = np.hstack( (split_xy_array[0], split_xy_array[1], split_xy_array[2], split_xy_array[3], split_xy_array[4]) )
 y_data = np.ravel(split_xy_array[5])
-print '{} {}'.format(X_data[:5], y_data[:5])
-"""
-split_major_array = np.hsplit(major_array, len(major_array[0]))
-
-#excluding year from dataset
-X_data = np.hstack((split_major_array[1], split_major_array[2], split_major_array[3], split_major_array[4]))
-y_data = np.ravel(split_major_array[5])
 
 #create feature scaler
 scaler = StandardScaler(copy=True, with_mean=True, with_std=True)
 X_data_scaled = scaler.fit_transform(X_data)
 
+#create regressor
+regr = LinearRegression()
+
+#cross validation
 accuracy_rates = []
-kf = KFold(len(y_data), n_folds = 3, shuffle=False) #create cross validation model
+kf = KFold(len(y_data), n_folds = 2, shuffle=True) #create cross validation model
 
 for train_index, test_index in kf:
     X_train, X_test = X_data_scaled[train_index], X_data_scaled[test_index]
     y_train, y_test = y_data[train_index], y_data[test_index]
-    clf.fit(X_train, y_train)
-    predicted = clf.predict(X_test)
-    accuracy = clf.score(X_test, y_test)
+    regr.fit(X_train, y_train)
+    predicted = regr.predict(X_test)
+    accuracy = regr.score(X_test, y_test)
     accuracy_rates.append(accuracy)
 
-clf.fit(X_data_scaled[:int(len(y_data)*.7)], y_data[:int(len(y_data)*.7)])
+regr.fit(X_data_scaled[:int(len(y_data)*.7)], y_data[:int(len(y_data)*.7)])
 
 print("Mean(accuracy_rates) = %.5f" % (np.mean(accuracy_rates)))
 
+"""
 #find and print the f1 score
 fsco = f1_score(y_data, clf.predict(X_data_scaled), pos_label = None, average = None) #returns an f1 score for each class respectively, doesn't compute a mean f1score
 print("fscores for respective classes are: ")
