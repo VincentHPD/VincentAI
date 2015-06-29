@@ -41,6 +41,7 @@ def rows_in_xls(xls_file_path):
 
             #we need some of the data from the row before we overwrite any data
             offense_type, beat = clean_row[2], clean_row[3]
+	    num_offenses = clean_row[9]
 
             clean_row.pop(0) #remove the old value for the date
             clean_row.insert(0, year) #add in the year as the first value in the list
@@ -54,9 +55,12 @@ def rows_in_xls(xls_file_path):
             clean_row.insert(4, offense_type)
             clean_row.pop(5)
             clean_row.insert(5, beat)
+	    clean_row.pop(6)
+	    clean_row.insert(6, num_offenses)
 
+	    #pop the remaining data from clean_row
             try:
-                [clean_row.pop(i) for i in range(6, len(clean_row))]
+                [clean_row.pop(i) for i in range(7, len(clean_row))]
             except:
                 pass
 
@@ -114,12 +118,13 @@ db_con = sqlite3.connect('crime_records.db')
 
 cur = db_con.cursor()
 
-cur.execute('CREATE TABLE HPDCrimes(Year INTEGER, Month INTEGER, MDay INTEGER, WDay INTEGER, OffenseType TEXT, Beat TEXT)')
+cur.execute('CREATE TABLE HPDCrimes(Year INTEGER, Month INTEGER, MDay INTEGER, WDay INTEGER, OffenseType TEXT, Beat TEXT, NOffenses INTEGER)')
 
 for crime in data:
     try:
-        cur.execute('INSERT INTO HPDCrimes VALUES(?, ?, ?, ?, ?, ?)', (crime[0], crime[1], crime[2], crime[3], crime[4], crime[5]))
-        #DEBUG print ' executing sql writing {} {} {} {} {} {}'.format(crime[0], crime[1], crime[2], crime[3], crime[4], crime[5])
+        cur.execute('INSERT INTO HPDCrimes VALUES(?, ?, ?, ?, ?, ?, ?)', (crime[0], crime[1], crime[2], crime[3], crime[4], crime[5], crime[6]))
+        #DEBUG 
+	print('executing sql writing {} {} {} {} {} {} {}'.format(crime[0], crime[1], crime[2], crime[3], crime[4], crime[5], crime[6]))
     except:
         pass
 
