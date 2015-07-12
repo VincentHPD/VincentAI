@@ -2,14 +2,15 @@
 Copyright (c) 2015 Rakshak Talwar
 """
 
-import datetime, math, os, time
+import datetime, logging, math, os, pdb, time
+from threading import Thread
 import numpy as np
 import pandas as pd
 import json, sqlite3
 from sklearn.preprocessing import StandardScaler
 from sklearn.cross_validation import KFold, train_test_split
 from sklearn.linear_model import SGDClassifier, SGDRegressor, LinearRegression
-from sklearn.neighbors import KNeighborsRegressor
+from sklearn.neighbors import KNeighborsRegressor, KNeighborsClassifier
 from sklearn.metrics import f1_score
 from sklearn.learning_curve import learning_curve
 from sklearn.decomposition import PCA
@@ -33,7 +34,8 @@ for crime in db_cur.fetchall():
 	beat_hash = beat_mapper.get_hash(crime[4])
 	type_hash = type_mapper.get_hash(crime[5])
 
-	n_offenses = crime[6] #the number of offenses which occured (target value)
+	#the number of offenses which occured (target value)
+	n_offenses = 1 if crime[6]>0 else 0
 
 	temp_dict = {
 	    'date' : pd.datetime(year, month, m_day),
@@ -83,52 +85,62 @@ major_data_dict.update(no_crime_dicts)
 xy_list = []
 for key in major_data_dict:
 	#exclude year and extract day of week
-	month, m_day, w_day = major_data_dict[key]['date'].month, major_data_dict[key]['date'].day, major_data_dict[key]['date'].weekday()
+	year, month, m_day, w_day = major_data_dict[key]['date'].year, major_data_dict[key]['date'].month, major_data_dict[key]['date'].day, major_data_dict[key]['date'].weekday()
 	beat_hash = major_data_dict[key]['beat_hash']
 	type_hash = major_data_dict[key]['type_hash']
 	n_offenses = major_data_dict[key]['n_offenses']
-	xy_list.append( [month, m_day, w_day, beat_hash, type_hash, n_offenses] )
+	xy_list.append( [year, month, m_day, w_day, beat_hash, type_hash, n_offenses] )
 
 #make the numpy array of the data
 xy_array = np.array(xy_list)
 
 #seperate the features from the target to make X and y
 split_xy_array = np.hsplit(xy_array, len(xy_array[0]))
-X_data = np.hstack( (split_xy_array[0], split_xy_array[1], split_xy_array[2], split_xy_array[3], split_xy_array[4]) )
-y_data = np.ravel(split_xy_array[5])
+X_data = np.hstack( (split_xy_array[0], split_xy_array[1], split_xy_array[2], split_xy_array[3], split_xy_array[4], split_xy_array[5]) )
+y_data = np.ravel(split_xy_array[6])
 
 #create feature scaler
 scaler = StandardScaler(copy=True, with_mean=True, with_std=True)
 X_data_scaled = scaler.fit_transform(X_data)
 
-#create regressor
-#regr = LinearRegression()
-#regr = SGDClassifier(penalty='l2', alpha=0.00003, eta0=0.01)
-regr = KNeighborsRegressor(n_neighbors = 10, algorithm = 'auto')
+logging.basicConfig(level=logging.DEBUG, format='[%(levelname)s] (%(threadName)-10s) %(message)s',)
 
-#cross validation
-accuracy_rates = []
-kf = KFold(len(y_data), n_folds = 2, shuffle=True) #create cross validation model
+def create_training_thread(n_n):
+	regr = KNeighborsClassifier(n_neighbors = n_n, algorithm = 'auto')
+	#cross validation
+	accuracy_rates = []
+	kf = KFold(len(y_data), n_folds = 2, shuffle=True) #create cross validation model
+
+	for train_index, test_index in kf:
+		X_train, X_test = X_data_scaled[train_index], X_data_scaled[test_index]
+		y_train, y_test = y_data[train_index], y_data[test_index]
+		regr.fit(X_train, y_train)
+		predicted = regr.predict(X_test)
+		accuracy = regr.score(X_test, y_test)
+		accuracy_rates.append(accuracy)
+
+	# print('n_neighbors = {}'.format(n_n))
+	# print("Mean(accuracy_rates) = %.5f" % (np.mean(accuracy_rates)))
+	logging.debug('n_neighbors = {}'.format(n_n))
+	logging.debug("Mean(accuracy_rates) = %.5f" % (np.mean(accuracy_rates)))
+
+	#split the data into train and test sets
+	X_train, X_test, y_train, y_test = train_test_split(X_data_scaled, y_data, test_size = 0.4, random_state=42)
+
+	#fit the regressor
+	regr.fit(X_train, y_train)
+
+	# print('f1 scores: {}\n'.format(f1_score(y_test, regr.predict(X_test), average=None)))
+	logging.debug('f1 scores: {}\n'.format(f1_score(y_test, regr.predict(X_test), average=None)))
+
+threads = []
+for n_n in range(2, 10, 2):
+	t = Thread(target=create_training_thread, args=(n_n,))
+	threads.append(t)
+	t.start()
+[th.join() for th in threads]
+
 """
-for train_index, test_index in kf:
-    X_train, X_test = X_data_scaled[train_index], X_data_scaled[test_index]
-    y_train, y_test = y_data[train_index], y_data[test_index]
-    regr.fit(X_train, y_train)
-    predicted = regr.predict(X_test)
-    accuracy = regr.score(X_test, y_test)
-    accuracy_rates.append(accuracy)
-
-print("Mean(accuracy_rates) = %.5f" % (np.mean(accuracy_rates)))
-"""
-#split the data into train and test sets
-X_train, X_test, y_train, y_test = train_test_split(X_data_scaled, y_data, test_size = 0.4, random_state=42)
-
-#fit the regressor
-regr.fit(X_train, y_train)
-
-#print('f1 scores: {}'.format(f1_score(y_data, regr.predict(X_data_scaled), average=None)))
-
-
 #plotting learning curves
 plt.figure()
 plt.title('Learning Curves for: {}'.format([t for t in type_mapper.key_to_hash]))
@@ -146,7 +158,7 @@ plt.plot(train_sizes, train_scores_mean, 'o-', color="r", label="Training score"
 plt.plot(train_sizes, test_scores_mean, 'o-', color="g", label="Cross-validation score")
 plt.legend(loc="best")
 plt.show()
-
+"""
 
 """
 #plotting
@@ -158,7 +170,7 @@ plt.subplot(1, 1, 1)
 print '{} {}'.format(reduc_x, y_data)
 plt.plot(reduc_x, y_data, 'ro')
 plt.ylim([-.1, 20.1])
-plt.xlim([-3, 3])
+plt.xlim([-10, 10])
 plt.title('Vincent')
 plt.xlabel('Reduced Feature Space')
 plt.ylabel('Number of Offenses')

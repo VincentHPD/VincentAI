@@ -1,0 +1,67 @@
+KNN binary classifier with different k values
+
+Types of crimes: {u'Auto Theft': 5, u'Murder': 0, u'Theft': 6, u'Aggravated Assault': 3, u'Robbery': 2, u'Burglary': 4, u'Rape': 1}
+
+n_neighbors = 2
+Mean(accuracy_rates) = 0.81253
+f1 scores: [ 0.88979744  0.37761566]
+
+n_neighbors = 3
+Mean(accuracy_rates) = 0.80998
+f1 scores: [ 0.88250199  0.49970735]
+
+n_neighbors = 4
+Mean(accuracy_rates) = 0.82274
+f1 scores: [ 0.89474386  0.44568665]
+
+n_neighbors = 5
+Mean(accuracy_rates) = 0.82129
+f1 scores: [ 0.8905724   0.51401513]
+
+n_neighbors = 6
+Mean(accuracy_rates) = 0.82871
+f1 scores: [ 0.89802437  0.47472056]
+
+n_neighbors = 7
+Mean(accuracy_rates) = 0.82806
+f1 scores: [ 0.89530347  0.52348522]
+
+n_neighbors = 8
+Mean(accuracy_rates) = 0.83308
+f1 scores: [ 0.90007283  0.49253643]
+
+n_neighbors = 9
+Mean(accuracy_rates) = 0.83223
+f1 scores: [ 0.89813561  0.52842843]
+
+n_neighbors = 10
+Mean(accuracy_rates) = 0.83533
+f1 scores: [ 0.90177083  0.50422545]
+
+n_neighbors = 12
+Mean(accuracy_rates) = 0.83768
+f1 scores: [ 0.90287963  0.51082707]
+
+n_neighbors = 14
+Mean(accuracy_rates) = 0.83903
+f1 scores: [ 0.90377135  0.51465561]
+
+n_neighbors = 16
+Mean(accuracy_rates) = 0.83954
+f1 scores: [ 0.90435806  0.51717565]
+
+n_neighbors = 18
+Mean(accuracy_rates) = 0.84015
+f1 scores: [ 0.90473557  0.51798102]
+
+n_neighbors = 20
+Mean(accuracy_rates) = 0.84060
+f1 scores: [ 0.90516524  0.51852123]
+
+n_neighbors = 22
+Mean(accuracy_rates) = 0.84034
+f1 scores: [ 0.90531923  0.51768632]
+
+n_neighbors = 24
+Mean(accuracy_rates) = 0.84056
+f1 scores: [ 0.90540358  0.51647038]

@@ -2,6 +2,7 @@
 Copyright (c) 2015 Rakshak Talwar
 """
 import re
+import numpy as np
 
 class Mapper():
     def __init__(self):

@@ -1,0 +1,14 @@
+Types of crimes: {u'Auto Theft': 5, u'Murder': 0, u'Theft': 6, u'Aggravated Assault': 3, u'Robbery': 2, u'Burglary': 4, u'Rape': 1}
+n_neighbors = 4
+Mean(accuracy_rates) = 0.82218
+f1 scores: [ 0.89474386  0.44848341  0.00200803]
+
+n_neighbors = 6
+Mean(accuracy_rates) = 0.82877
+f1 scores: [ 0.89804694  0.4778442   0.        ]
+
+n_neighbors = 8
+Mean(accuracy_rates) = 0.83239
+f1 scores: [ 0.90011856  0.49601048  0.        ]
+
+time to complete: 1065s
