@@ -7,6 +7,7 @@ import pymongo
 start_time = time.time()
 
 crime_database_file = 'crime_records.db'
+
 mongo_db_name = 'vincentdb'
 mongo_collection_name = 'crime_instances'
 
@@ -34,13 +35,18 @@ for crime in db_cur.fetchall():
 	n_offenses = int(crime[6]) 
 
 	temp_dict = {
-	    'uniq' : '{}-{}-{}-{}-{}'.format(year, month, m_day, beat, type_crime),
+	    '_id' : '{}-{}-{}-{}-{}'.format(year, month, m_day, beat, type_crime),
 	    'date' : pd.datetime(year, month, m_day),
 	    'beat' : beat,
 	    'type_crime' : type_crime,
 	    'n_offenses' : n_offenses}
 
-	mon_col.insert_one(temp_dict)
+	try:
+		mon_col.insert_one(temp_dict)
+	except pymongo.errors.DuplicateKeyError:
+		#since the record exists, update the n_offenses to count for the additional crime instance
+		prev_n_offenses = mon_col.find_one({"_id" : temp_dict['_id']}, {"n_offenses" : 1, "_id" : 0})["n_offenses"]
+		mon_col.update_one({"_id" : {"$eq" : temp_dict['_id']}}, {"$set" : {"n_offenses" : prev_n_offenses + n_offenses}})
 
 #close the connections
 db_con.close()

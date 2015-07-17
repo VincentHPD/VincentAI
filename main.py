@@ -6,11 +6,12 @@ import datetime, logging, math, os, pdb, time
 from threading import Thread
 import numpy as np
 import pandas as pd
-import json, sqlite3
-from sklearn.preprocessing import StandardScaler
+from pymongo import MongoClient
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import PolynomialFeatures, StandardScaler
 from sklearn.cross_validation import KFold, train_test_split
-from sklearn.linear_model import SGDClassifier, SGDRegressor, LinearRegression
-from sklearn.neighbors import KNeighborsRegressor, KNeighborsClassifier
+from sklearn.linear_model import LinearRegression
+from sklearn.neighbors import KNeighborsClassifier
 from sklearn.metrics import f1_score
 from sklearn.learning_curve import learning_curve
 from sklearn.decomposition import PCA
@@ -18,81 +19,63 @@ import matplotlib.pyplot as plt
 import vincent
 start_time = time.time()
 
-crime_database_file = 'crime_records.db'
-
-type_mapper = vincent.Mapper()
-beat_mapper = vincent.Mapper()
-
-#create and add crime instances to the database
-db_con = sqlite3.connect(crime_database_file)
-db_cur = db_con.cursor()
-db_cur.execute('SELECT Year INTEGER, Month INTEGER, MDay INTEGER, WDay INTEGER, Beat TEXT, OffenseType TEXT, NOffenses INTEGER FROM HPDCrimes ORDER BY Year ASC')
-crime_dicts = {}
-for crime in db_cur.fetchall():
-	(year, month, m_day, w_day) = (crime[0], crime[1], crime[2], crime[3])
-	#convert the OffenseTypes and Beats to hashes
-	beat_hash = beat_mapper.get_hash(crime[4])
-	type_hash = type_mapper.get_hash(crime[5])
-
-	#the number of offenses which occured (target value)
-	n_offenses = 1 if crime[6]>0 else 0
-
-	temp_dict = {
-	    'date' : pd.datetime(year, month, m_day),
-	    'beat_hash' : beat_hash,
-	    'type_hash' : type_hash,
-	    'n_offenses' : n_offenses}
-
-	crime_key = '{}-{}-{}-{}-{}'.format(year, month, m_day, beat_hash, type_hash)
-	crime_dicts.update({crime_key : temp_dict})
-db_con.close()
+#import data from the mongo database
+mongo_db_name = 'vincentdb'
+crime_col_name = 'crime_instances'
+mon_conn = MongoClient('localhost', 27017) #create mongo connection 
+mon_db = mon_conn[mongo_db_name] #connect to the mongo database
+mon_col = mon_db[crime_col_name] #pull up crime collection
 
 #find the earliest and latest datetime objects
-all_crime_dates = [crime_dicts[key]['date'] for key in crime_dicts]
-sorted_crime_dates = sorted(all_crime_dates)
-#find all of the hashes for beats and types of crimes
-beat_mapper_hashes = beat_mapper.hash_to_key.keys()
-type_mapper_hashes = type_mapper.hash_to_key.keys()
-
-print("Types of crimes: {}".format(type_mapper.key_to_hash))
-
+earliest_date = mon_col.find_one({}, {'date' : 1, '_id' : 0}, sort=[("date", 1)])['date']
+latest_date = mon_col.find_one({}, {'date' : 1, '_id' : 0}, sort=[("date", -1)])['date']
 #create an array to store all possible incidences of crime whether they occurred or not
-start_date, end_date = sorted_crime_dates[0], sorted_crime_dates[-1]
-range_dates = pd.date_range(start_date, end_date, freq='D')
+range_dates = pd.date_range(earliest_date, latest_date, freq='D')
+
+#create mapping objects and fill them up
+type_mapper = vincent.Mapper()
+beat_mapper = vincent.Mapper()
+[type_mapper.get_hash(val) for val in mon_col.distinct("type_crime")]
+[beat_mapper.get_hash(val) for val in mon_col.distinct("beat")]
+#beat_mapper_hashes = beat_mapper.hash_to_key.keys()
+#type_mapper_hashes = type_mapper.hash_to_key.keys()
+
+#find all crime instances from mongo collection 
+crime_dicts = {dic["_id"]:dic for dic in  mon_col.find({})}
 
 no_crime_dicts = {} #stores entries for combinations where no crimes occured
 #find all combinations where a crime didn't occur
 for date_ in range_dates:
-	for beat in beat_mapper_hashes:
-		for crime_type in type_mapper_hashes:
-			temp_key = '{}-{}-{}-{}-{}'.format(date_.year, date_.month, date_.day, beat, crime_type)
-			temp_dict = {temp_key : {'date' : date_, 'beat_hash' : beat, 'type_hash' : crime_type, 'n_offenses' : 0.0 } }
+	for beat in beat_mapper.key_to_hash.keys():
+		for crime_type in type_mapper.key_to_hash.keys():
+			_id = '{}-{}-{}-{}-{}'.format(date_.year, date_.month, date_.day, beat, crime_type)
+			temp_dict = {
+					_id : 
+					{'_id' : _id, 
+					'date' : date_, 
+					'beat' : beat, 
+					'type_crime' : crime_type, 
+					'n_offenses' : 0 }}
 			#check to see if this combination already has a crime associated
-			if not crime_dicts.has_key(temp_key):
-				#if not, add it as a no crime occurrence (n_offenses = 0.0)
+			if not crime_dicts.has_key(_id):
+				#if not, add it as a no crime occurrence (n_offenses = 0)
 				no_crime_dicts.update(temp_dict)
 #combine the data of all crime and no-crime occurences
 major_data_dict = crime_dicts.copy()
 major_data_dict.update(no_crime_dicts)
 
-#DEBUG
-"""for key in major_data_dict.keys()[:50]:
-	print('{} {} {} {}'.format(major_data_dict[key]['date'], beat_mapper.get_key(major_data_dict[key]['beat_hash']),
-		type_mapper.get_key(major_data_dict[key]['type_hash']), major_data_dict[key]['n_offenses']))
-"""
-
 #make a nested list containing all of the data
 xy_list = []
 for key in major_data_dict:
-	#exclude year and extract day of week
+	#extract day of week along with other date related features
 	year, month, m_day, w_day = major_data_dict[key]['date'].year, major_data_dict[key]['date'].month, major_data_dict[key]['date'].day, major_data_dict[key]['date'].weekday()
-	beat_hash = major_data_dict[key]['beat_hash']
-	type_hash = major_data_dict[key]['type_hash']
+	beat_hash = beat_mapper.get_hash(major_data_dict[key]['beat'])
+	type_hash = type_mapper.get_hash(major_data_dict[key]['type_crime'])
 	n_offenses = major_data_dict[key]['n_offenses']
 	xy_list.append( [year, month, m_day, w_day, beat_hash, type_hash, n_offenses] )
 
 #make the numpy array of the data
-xy_array = np.array(xy_list)
+xy_array = np.asarray(xy_list, dtype=float)
 
 #seperate the features from the target to make X and y
 split_xy_array = np.hsplit(xy_array, len(xy_array[0]))
@@ -103,62 +86,35 @@ y_data = np.ravel(split_xy_array[6])
 scaler = StandardScaler(copy=True, with_mean=True, with_std=True)
 X_data_scaled = scaler.fit_transform(X_data)
 
-logging.basicConfig(level=logging.DEBUG, format='[%(levelname)s] (%(threadName)-10s) %(message)s',)
+#split the data into train and test sets
+X_train, X_test, y_train, y_test = train_test_split(X_data_scaled, y_data, test_size = 0.4, random_state=42)
 
-def create_training_thread(n_n):
-	regr = KNeighborsClassifier(n_neighbors = n_n, algorithm = 'auto')
-	#cross validation
-	accuracy_rates = []
-	kf = KFold(len(y_data), n_folds = 2, shuffle=True) #create cross validation model
+for pl, deg in enumerate(range(3, 5)):
+	#create polynomial linear regressor
+	poly = PolynomialFeatures(degree=deg)
+	lin_reg = LinearRegression()
+	regr = Pipeline([('poly', poly), ('lin_reg', lin_reg)])
 
-	for train_index, test_index in kf:
-		X_train, X_test = X_data_scaled[train_index], X_data_scaled[test_index]
-		y_train, y_test = y_data[train_index], y_data[test_index]
-		regr.fit(X_train, y_train)
-		predicted = regr.predict(X_test)
-		accuracy = regr.score(X_test, y_test)
-		accuracy_rates.append(accuracy)
-
-	# print('n_neighbors = {}'.format(n_n))
-	# print("Mean(accuracy_rates) = %.5f" % (np.mean(accuracy_rates)))
-	logging.debug('n_neighbors = {}'.format(n_n))
-	logging.debug("Mean(accuracy_rates) = %.5f" % (np.mean(accuracy_rates)))
-
-	#split the data into train and test sets
-	X_train, X_test, y_train, y_test = train_test_split(X_data_scaled, y_data, test_size = 0.4, random_state=42)
-
-	#fit the regressor
+	#fit the algorithm
 	regr.fit(X_train, y_train)
 
-	# print('f1 scores: {}\n'.format(f1_score(y_test, regr.predict(X_test), average=None)))
-	logging.debug('f1 scores: {}\n'.format(f1_score(y_test, regr.predict(X_test), average=None)))
-
-threads = []
-for n_n in range(2, 10, 2):
-	t = Thread(target=create_training_thread, args=(n_n,))
-	threads.append(t)
-	t.start()
-[th.join() for th in threads]
-
-"""
-#plotting learning curves
-plt.figure()
-plt.title('Learning Curves for: {}'.format([t for t in type_mapper.key_to_hash]))
-plt.xlabel('Training examples')
-plt.ylabel('Score')
-train_sizes, train_scores, test_scores = learning_curve(regr, X_data_scaled, y_data, train_sizes=np.array([.1,.2,.5,.8,.99]), cv=kf)
-train_scores_mean = np.mean(train_scores, axis=1)
-train_scores_std = np.std(train_scores, axis=1)
-test_scores_mean = np.mean(test_scores, axis=1)
-test_scores_std = np.std(test_scores, axis=1)
-plt.grid()
-plt.fill_between(train_sizes, train_scores_mean - train_scores_std, train_scores_mean + train_scores_std, alpha=0.1, color="r")
-plt.fill_between(train_sizes, test_scores_mean - test_scores_std, test_scores_mean + test_scores_std, alpha=0.1, color="g")
-plt.plot(train_sizes, train_scores_mean, 'o-', color="r", label="Training score")
-plt.plot(train_sizes, test_scores_mean, 'o-', color="g", label="Cross-validation score")
-plt.legend(loc="best")
+	#plotting learning curves
+	plt.subplot(2, 3, pl)
+	plt.title('Learning Curves with degree: {}'.format(deg))
+	plt.xlabel('Training examples')
+	plt.ylabel('Score')
+	train_sizes, train_scores, test_scores = learning_curve(regr, X_data_scaled, y_data, train_sizes=np.array([.1,.2,.5,.8,.99]))
+	train_scores_mean = np.mean(train_scores, axis=1)
+	train_scores_std = np.std(train_scores, axis=1)
+	test_scores_mean = np.mean(test_scores, axis=1)
+	test_scores_std = np.std(test_scores, axis=1)
+	plt.grid()
+	plt.fill_between(train_sizes, train_scores_mean - train_scores_std, train_scores_mean + train_scores_std, alpha=0.1, color="r")
+	plt.fill_between(train_sizes, test_scores_mean - test_scores_std, test_scores_mean + test_scores_std, alpha=0.1, color="g")
+	plt.plot(train_sizes, train_scores_mean, 'o-', color="r", label="Training score")
+	plt.plot(train_sizes, test_scores_mean, 'o-', color="g", label="Cross-validation score")
+	plt.legend(loc="best")
 plt.show()
-"""
 
 """
 #plotting
@@ -175,6 +131,20 @@ plt.title('Vincent')
 plt.xlabel('Reduced Feature Space')
 plt.ylabel('Number of Offenses')
 plt.show()
+"""
+
+"""
+#cross validation
+accuracy_rates = []
+kf = KFold(len(y_data), n_folds = 2, shuffle=True) #create cross validation model
+
+for train_index, test_index in kf:
+	X_train, X_test = X_data_scaled[train_index], X_data_scaled[test_index]
+	y_train, y_test = y_data[train_index], y_data[test_index]
+	regr.fit(X_train, y_train)
+	predicted = regr.predict(X_test)
+	accuracy = regr.score(X_test, y_test)
+	accuracy_rates.append(accuracy)
 """
 
 print 'time to complete: %ds' % (time.time() - start_time)
