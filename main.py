@@ -116,9 +116,8 @@ y_data = n_off.values  # target values
 
 
 # create feature scaler
-#scaler = StandardScaler(copy=True, with_mean=True, with_std=True)
-#X_data_scaled = scaler.fit_transform(X_data)
-X_data_scaled = X_data
+scaler = StandardScaler(copy=True, with_mean=True, with_std=True)
+X_data_scaled = scaler.fit_transform(X_data)
 
 
 # split the data into train and test sets
@@ -126,6 +125,8 @@ X_train, X_test, y_train, y_test = train_test_split(
     X_data_scaled, y_data, test_size=0.4, random_state=42)
 
 for pl, nn in enumerate(range(5, 10)):
+    nn = nn + 1
+
     # create the classifier
     clf = KNeighborsClassifier(nn)
 
@@ -155,12 +156,26 @@ for pl, nn in enumerate(range(5, 10)):
     plt.legend(loc="best")
 
     # DEBUG
-    # print f1_scores
+    #cross validation
+
+    # find f1_scores
     y_true = y_test
     y_pred = clf.predict(X_test)
     f_sco = f1_score(y_true, y_pred, average=None)
 
-    print('for k = {0} f_scores: {1}'.format(nn, f_sco))
+    accuracy_rates = []
+    kf = KFold(len(y_data), n_folds = 3, shuffle=True) #create cross validation model
+
+    for train_index, test_index in kf:
+    	X_train, X_test = X_data_scaled[train_index], X_data_scaled[test_index]
+    	y_train, y_test = y_data[train_index], y_data[test_index]
+    	clf.fit(X_train, y_train)
+    	predicted = clf.predict(X_test)
+    	accuracy = clf.score(X_test, y_test)
+    	accuracy_rates.append(accuracy)
+
+    # print metrics
+    print('for k = {0}\nf_scores: {1}\naccuracy: {2}\n\n'.format(nn, f_sco, accuracy_rates))
 
 plt.show()
 
