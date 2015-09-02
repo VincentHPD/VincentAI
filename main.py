@@ -2,7 +2,12 @@
 Copyright (c) 2015 Rakshak Talwar
 """
 
-import datetime, logging, math, os, pdb, time
+import datetime
+import logging
+import math
+import os
+import pdb
+import time
 from threading import Thread
 import numpy as np
 import pandas as pd
@@ -19,20 +24,23 @@ import matplotlib.pyplot as plt
 import vincent
 start_time = time.time()
 
-#import data from the mongo database
+# import data from the mongo database
 mongo_db_name = 'vincentdb'
 crime_col_name = 'crime_instances'
-mon_conn = MongoClient('localhost', 27017) #create mongo connection 
-mon_db = mon_conn[mongo_db_name] #connect to the mongo database
-mon_col = mon_db[crime_col_name] #pull up crime collection
+mon_conn = MongoClient('localhost', 27017)  # create mongo connection
+mon_db = mon_conn[mongo_db_name]  # connect to the mongo database
+mon_col = mon_db[crime_col_name]  # pull up crime collection
 
-#find the earliest and latest datetime objects
-earliest_date = mon_col.find_one({}, {'date' : 1, '_id' : 0}, sort=[("date", 1)])['date']
-latest_date = mon_col.find_one({}, {'date' : 1, '_id' : 0}, sort=[("date", -1)])['date']
-#create an array to store all possible incidences of crime whether they occurred or not
+# find the earliest and latest datetime objects
+earliest_date = mon_col.find_one(
+    {}, {'date': 1, '_id': 0}, sort=[("date", 1)])['date']
+latest_date = mon_col.find_one(
+    {}, {'date': 1, '_id': 0}, sort=[("date", -1)])['date']
+# create an array to store all possible incidences of crime whether they
+# occurred or not
 range_dates = pd.date_range(earliest_date, latest_date, freq='D')
 
-#create mapping objects and fill them up
+# create mapping objects and fill them up
 type_mapper = vincent.Mapper()
 beat_mapper = vincent.Mapper()
 [type_mapper.get_hash(val) for val in mon_col.distinct("type_crime")]
@@ -40,80 +48,111 @@ beat_mapper = vincent.Mapper()
 #beat_mapper_hashes = beat_mapper.hash_to_key.keys()
 #type_mapper_hashes = type_mapper.hash_to_key.keys()
 
-#find all crime instances from mongo collection 
-crime_dicts = {dic["_id"]:dic for dic in  mon_col.find({})}
+# find all crime instances from mongo collection
+crime_dicts = {dic["_id"]: dic for dic in mon_col.find({})}
 
-no_crime_dicts = {} #stores entries for combinations where no crimes occured
-#find all combinations where a crime didn't occur
+no_crime_dicts = {}  # stores entries for combinations where no crimes occured
+# find all combinations where a crime didn't occur
 for date_ in range_dates:
-	for beat in beat_mapper.key_to_hash.keys():
-		for crime_type in type_mapper.key_to_hash.keys():
-			_id = '{}-{}-{}-{}-{}'.format(date_.year, date_.month, date_.day, beat, crime_type)
-			temp_dict = {
-					_id : 
-					{'_id' : _id, 
-					'date' : date_, 
-					'beat' : beat, 
-					'type_crime' : crime_type, 
-					'n_offenses' : 0 }}
-			#check to see if this combination already has a crime associated
-			if not crime_dicts.has_key(_id):
-				#if not, add it as a no crime occurrence (n_offenses = 0)
-				no_crime_dicts.update(temp_dict)
-#combine the data of all crime and no-crime occurences
+    for beat in beat_mapper.key_to_hash.keys():
+        for crime_type in type_mapper.key_to_hash.keys():
+            _id = '{}-{}-{}-{}-{}'.format(date_.year,
+                                          date_.month, date_.day, beat, crime_type)
+            temp_dict = {
+                _id:
+                {'_id': _id,
+                 'date': date_,
+                 'beat': beat,
+                 'type_crime': crime_type,
+                 'n_offenses': 0}}
+            # check to see if this combination already has a crime associated
+            if not crime_dicts.has_key(_id):
+                # if not, add it as a no crime occurrence (n_offenses = 0)
+                no_crime_dicts.update(temp_dict)
+# combine the data of all crime and no-crime occurences
 major_data_dict = crime_dicts.copy()
 major_data_dict.update(no_crime_dicts)
 
-#make a nested list containing all of the data
+# make a nested list containing all of the data as dicts
 xy_list = []
 for key in major_data_dict:
-	#extract day of week along with other date related features
-	year, month, m_day, w_day = major_data_dict[key]['date'].year, major_data_dict[key]['date'].month, major_data_dict[key]['date'].day, major_data_dict[key]['date'].weekday()
-	beat_hash = beat_mapper.get_hash(major_data_dict[key]['beat'])
-	type_hash = type_mapper.get_hash(major_data_dict[key]['type_crime'])
-	n_offenses = major_data_dict[key]['n_offenses']
-	xy_list.append( [year, month, m_day, w_day, beat_hash, type_hash, n_offenses] )
+    # extract day of week along with other date related features
+    year, month, m_day, w_day = major_data_dict[key]['date'].year, major_data_dict[key][
+        'date'].month, major_data_dict[key]['date'].day, major_data_dict[key]['date'].weekday()
+    beat_hash = beat_mapper.get_hash(major_data_dict[key]['beat'])
+    type_hash = type_mapper.get_hash(major_data_dict[key]['type_crime'])
+    n_offenses = major_data_dict[key]['n_offenses']
+    xy_list.append(
+        {'year': year,
+         'month': month,
+         'm_day': m_day,
+         'w_day': w_day,
+         'beat_hash': beat_hash,
+         'type_hash': type_hash,
+         'n_offenses': n_offenses})
 
-#make the numpy array of the data
-xy_array = np.asarray(xy_list, dtype=float)
+# make a pandas DataFrame of the data
+df = pd.DataFrame(xy_list, columns=[
+                  'year', 'month', 'm_day', 'w_day', 'beat_hash', 'type_hash', 'n_offenses'], dtype=int)
 
-#seperate the features from the target to make X and y
-split_xy_array = np.hsplit(xy_array, len(xy_array[0]))
-X_data = np.hstack( (split_xy_array[0], split_xy_array[1], split_xy_array[2], split_xy_array[3], split_xy_array[4], split_xy_array[5]) )
-y_data = np.ravel(split_xy_array[6])
+# we need to vectorize the beats, remove the current beat data column, and
+# then concatenate the vectorized data
+beats_dummies = pd.get_dummies(df['beat_hash'])
+df = df.drop('beat_hash', axis=1)
+df = pd.concat([df, beats_dummies], axis=1)
 
-#create feature scaler
+# now we need to vectorize the types of crime, remove the current type data column, and
+# then concatenate the vectorized data
+types_dummies = pd.get_dummies(df['type_hash'])
+df = df.drop('type_hash', axis=1)
+df = pd.concat([df, types_dummies], axis=1)
+
+# seperate the features from the target to make X and y
+n_off = df['n_offenses']  # column from the matrix which will be target values
+df = df.drop('n_offenses', axis=1)  # drop the target value
+X_data = df.values  # feature values
+y_data = n_off.values  # target values
+
+pdb.set_trace()
+
+# create feature scaler
 scaler = StandardScaler(copy=True, with_mean=True, with_std=True)
 X_data_scaled = scaler.fit_transform(X_data)
 
-#split the data into train and test sets
-X_train, X_test, y_train, y_test = train_test_split(X_data_scaled, y_data, test_size = 0.4, random_state=42)
+# split the data into train and test sets
+X_train, X_test, y_train, y_test = train_test_split(
+    X_data_scaled, y_data, test_size=0.4, random_state=42)
 
 for pl, deg in enumerate(range(3, 5)):
-	#create polynomial linear regressor
-	poly = PolynomialFeatures(degree=deg)
-	lin_reg = LinearRegression()
-	regr = Pipeline([('poly', poly), ('lin_reg', lin_reg)])
+    # create polynomial linear regressor
+    poly = PolynomialFeatures(degree=deg)
+    lin_reg = LinearRegression()
+    regr = Pipeline([('poly', poly), ('lin_reg', lin_reg)])
 
-	#fit the algorithm
-	regr.fit(X_train, y_train)
+    # fit the algorithm
+    regr.fit(X_train, y_train)
 
-	#plotting learning curves
-	plt.subplot(2, 3, pl)
-	plt.title('Learning Curves with degree: {}'.format(deg))
-	plt.xlabel('Training examples')
-	plt.ylabel('Score')
-	train_sizes, train_scores, test_scores = learning_curve(regr, X_data_scaled, y_data, train_sizes=np.array([.1,.2,.5,.8,.99]))
-	train_scores_mean = np.mean(train_scores, axis=1)
-	train_scores_std = np.std(train_scores, axis=1)
-	test_scores_mean = np.mean(test_scores, axis=1)
-	test_scores_std = np.std(test_scores, axis=1)
-	plt.grid()
-	plt.fill_between(train_sizes, train_scores_mean - train_scores_std, train_scores_mean + train_scores_std, alpha=0.1, color="r")
-	plt.fill_between(train_sizes, test_scores_mean - test_scores_std, test_scores_mean + test_scores_std, alpha=0.1, color="g")
-	plt.plot(train_sizes, train_scores_mean, 'o-', color="r", label="Training score")
-	plt.plot(train_sizes, test_scores_mean, 'o-', color="g", label="Cross-validation score")
-	plt.legend(loc="best")
+    # plotting learning curves
+    plt.subplot(2, 3, pl)
+    plt.title('Learning Curves with degree: {}'.format(deg))
+    plt.xlabel('Training examples')
+    plt.ylabel('Score')
+    train_sizes, train_scores, test_scores = learning_curve(
+        regr, X_data_scaled, y_data, train_sizes=np.array([.1, .2, .5, .8, .99]))
+    train_scores_mean = np.mean(train_scores, axis=1)
+    train_scores_std = np.std(train_scores, axis=1)
+    test_scores_mean = np.mean(test_scores, axis=1)
+    test_scores_std = np.std(test_scores, axis=1)
+    plt.grid()
+    plt.fill_between(train_sizes, train_scores_mean - train_scores_std,
+                     train_scores_mean + train_scores_std, alpha=0.1, color="r")
+    plt.fill_between(train_sizes, test_scores_mean - test_scores_std,
+                     test_scores_mean + test_scores_std, alpha=0.1, color="g")
+    plt.plot(train_sizes, train_scores_mean, 'o-',
+             color="r", label="Training score")
+    plt.plot(train_sizes, test_scores_mean, 'o-',
+             color="g", label="Cross-validation score")
+    plt.legend(loc="best")
 plt.show()
 
 """
