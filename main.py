@@ -2,12 +2,7 @@
 Copyright (c) 2015 Rakshak Talwar
 """
 
-import datetime
-import logging
-import math
-import os
-import pdb
-import time
+import math, os, pdb, time, datetime, logging
 from threading import Thread
 import numpy as np
 import pandas as pd
@@ -17,6 +12,7 @@ from sklearn.preprocessing import PolynomialFeatures, StandardScaler
 from sklearn.cross_validation import KFold, train_test_split
 from sklearn.linear_model import LinearRegression
 from sklearn.neighbors import KNeighborsClassifier
+from sklearn.naive_bayes import MultinomialNB
 from sklearn.metrics import f1_score
 from sklearn.learning_curve import learning_curve
 from sklearn.decomposition import PCA
@@ -82,6 +78,11 @@ for key in major_data_dict:
     beat_hash = beat_mapper.get_hash(major_data_dict[key]['beat'])
     type_hash = type_mapper.get_hash(major_data_dict[key]['type_crime'])
     n_offenses = major_data_dict[key]['n_offenses']
+
+    #DEBUG checking to see if limiting to only 3 classes will improve f1_score
+    if n_offenses > 2:
+        n_offenses = 2
+
     xy_list.append(
         {'year': year,
          'month': month,
@@ -113,32 +114,31 @@ df = df.drop('n_offenses', axis=1)  # drop the target value
 X_data = df.values  # feature values
 y_data = n_off.values  # target values
 
-pdb.set_trace()
 
 # create feature scaler
-scaler = StandardScaler(copy=True, with_mean=True, with_std=True)
-X_data_scaled = scaler.fit_transform(X_data)
+#scaler = StandardScaler(copy=True, with_mean=True, with_std=True)
+#X_data_scaled = scaler.fit_transform(X_data)
+X_data_scaled = X_data
+
 
 # split the data into train and test sets
 X_train, X_test, y_train, y_test = train_test_split(
     X_data_scaled, y_data, test_size=0.4, random_state=42)
 
-for pl, deg in enumerate(range(3, 5)):
-    # create polynomial linear regressor
-    poly = PolynomialFeatures(degree=deg)
-    lin_reg = LinearRegression()
-    regr = Pipeline([('poly', poly), ('lin_reg', lin_reg)])
+for pl, nn in enumerate(range(5, 10)):
+    # create the classifier
+    clf = KNeighborsClassifier(nn)
 
     # fit the algorithm
-    regr.fit(X_train, y_train)
+    clf.fit(X_train, y_train)
 
     # plotting learning curves
-    plt.subplot(2, 3, pl)
-    plt.title('Learning Curves with degree: {}'.format(deg))
+    plt.subplot(3, 3, pl)
+    plt.title('Learning Curves for KNN k={} with Vect. Type and Beat'.format(nn))
     plt.xlabel('Training examples')
     plt.ylabel('Score')
     train_sizes, train_scores, test_scores = learning_curve(
-        regr, X_data_scaled, y_data, train_sizes=np.array([.1, .2, .5, .8, .99]))
+        clf, X_data_scaled, y_data, train_sizes=np.array([.1, .2, .5, .8, .99]))
     train_scores_mean = np.mean(train_scores, axis=1)
     train_scores_std = np.std(train_scores, axis=1)
     test_scores_mean = np.mean(test_scores, axis=1)
@@ -153,7 +153,18 @@ for pl, deg in enumerate(range(3, 5)):
     plt.plot(train_sizes, test_scores_mean, 'o-',
              color="g", label="Cross-validation score")
     plt.legend(loc="best")
+
+    # DEBUG
+    # print f1_scores
+    y_true = y_test
+    y_pred = clf.predict(X_test)
+    f_sco = f1_score(y_true, y_pred, average=None)
+
+    print('for k = {0} f_scores: {1}'.format(nn, f_sco))
+
 plt.show()
+
+
 
 """
 #plotting

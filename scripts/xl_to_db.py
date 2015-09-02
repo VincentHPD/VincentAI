@@ -123,7 +123,7 @@ cur.execute('CREATE TABLE HPDCrimes(Year INTEGER, Month INTEGER, MDay INTEGER, W
 for crime in data:
     try:
         cur.execute('INSERT INTO HPDCrimes VALUES(?, ?, ?, ?, ?, ?, ?)', (crime[0], crime[1], crime[2], crime[3], crime[4], crime[5], crime[6]))
-        #DEBUG 
+        #DEBUG
 	print('executing sql writing {} {} {} {} {} {} {}'.format(crime[0], crime[1], crime[2], crime[3], crime[4], crime[5], crime[6]))
     except:
         pass
