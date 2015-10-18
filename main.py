@@ -10,15 +10,17 @@ from pymongo import MongoClient
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import PolynomialFeatures, StandardScaler
 from sklearn.cross_validation import KFold, train_test_split
-from sklearn.linear_model import LinearRegression
-from sklearn.neighbors import KNeighborsClassifier
 from sklearn.naive_bayes import MultinomialNB
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import f1_score
 from sklearn.learning_curve import learning_curve
 from sklearn.decomposition import PCA
 import matplotlib.pyplot as plt
 import vincent
 start_time = time.time()
+
+### Data Handling ###
 
 # import data from the mongo database
 mongo_db_name = 'vincentdb'
@@ -124,58 +126,56 @@ X_data_scaled = scaler.fit_transform(X_data)
 X_train, X_test, y_train, y_test = train_test_split(
     X_data_scaled, y_data, test_size=0.4, random_state=42)
 
-for pl, nn in enumerate(range(5, 10)):
-    nn = nn + 1
+### Begin ML ###
 
-    # create the classifier
-    clf = KNeighborsClassifier(nn)
+# create the classifier
+clf = RandomForestClassifier()
 
-    # fit the algorithm
+# fit the algorithm
+clf.fit(X_train, y_train)
+
+# plotting learning curves
+plt.title('Learning Curves')
+plt.xlabel('Training examples')
+plt.ylabel('Score')
+train_sizes, train_scores, test_scores = learning_curve(
+    clf, X_data_scaled, y_data, train_sizes=np.array([.1, .2, .5, .8, .99]))
+train_scores_mean = np.mean(train_scores, axis=1)
+train_scores_std = np.std(train_scores, axis=1)
+test_scores_mean = np.mean(test_scores, axis=1)
+test_scores_std = np.std(test_scores, axis=1)
+plt.grid()
+plt.fill_between(train_sizes, train_scores_mean - train_scores_std,
+                 train_scores_mean + train_scores_std, alpha=0.1, color="r")
+plt.fill_between(train_sizes, test_scores_mean - test_scores_std,
+                 test_scores_mean + test_scores_std, alpha=0.1, color="g")
+plt.plot(train_sizes, train_scores_mean, 'o-',
+         color="r", label="Training score")
+plt.plot(train_sizes, test_scores_mean, 'o-',
+         color="g", label="Cross-validation score")
+plt.legend(loc="best")
+
+# DEBUG
+#cross validation
+
+# find f1_scores
+y_true = y_test
+y_pred = clf.predict(X_test)
+f_sco = f1_score(y_true, y_pred, average=None)
+
+accuracy_rates = []
+kf = KFold(len(y_data), n_folds = 3, shuffle=True) #create cross validation model
+
+for train_index, test_index in kf:
+    X_train, X_test = X_data_scaled[train_index], X_data_scaled[test_index]
+    y_train, y_test = y_data[train_index], y_data[test_index]
     clf.fit(X_train, y_train)
+    predicted = clf.predict(X_test)
+    accuracy = clf.score(X_test, y_test)
+    accuracy_rates.append(accuracy)
 
-    # plotting learning curves
-    plt.subplot(3, 3, pl)
-    plt.title('Learning Curves for KNN k={} with Vect. Type and Beat'.format(nn))
-    plt.xlabel('Training examples')
-    plt.ylabel('Score')
-    train_sizes, train_scores, test_scores = learning_curve(
-        clf, X_data_scaled, y_data, train_sizes=np.array([.1, .2, .5, .8, .99]))
-    train_scores_mean = np.mean(train_scores, axis=1)
-    train_scores_std = np.std(train_scores, axis=1)
-    test_scores_mean = np.mean(test_scores, axis=1)
-    test_scores_std = np.std(test_scores, axis=1)
-    plt.grid()
-    plt.fill_between(train_sizes, train_scores_mean - train_scores_std,
-                     train_scores_mean + train_scores_std, alpha=0.1, color="r")
-    plt.fill_between(train_sizes, test_scores_mean - test_scores_std,
-                     test_scores_mean + test_scores_std, alpha=0.1, color="g")
-    plt.plot(train_sizes, train_scores_mean, 'o-',
-             color="r", label="Training score")
-    plt.plot(train_sizes, test_scores_mean, 'o-',
-             color="g", label="Cross-validation score")
-    plt.legend(loc="best")
-
-    # DEBUG
-    #cross validation
-
-    # find f1_scores
-    y_true = y_test
-    y_pred = clf.predict(X_test)
-    f_sco = f1_score(y_true, y_pred, average=None)
-
-    accuracy_rates = []
-    kf = KFold(len(y_data), n_folds = 3, shuffle=True) #create cross validation model
-
-    for train_index, test_index in kf:
-    	X_train, X_test = X_data_scaled[train_index], X_data_scaled[test_index]
-    	y_train, y_test = y_data[train_index], y_data[test_index]
-    	clf.fit(X_train, y_train)
-    	predicted = clf.predict(X_test)
-    	accuracy = clf.score(X_test, y_test)
-    	accuracy_rates.append(accuracy)
-
-    # print metrics
-    print('for k = {0}\nf_scores: {1}\naccuracy: {2}\n\n'.format(nn, f_sco, accuracy_rates))
+# print metrics
+print('f_scores: {}\naccuracy: {}\n\n'.format(f_sco, accuracy_rates))
 
 plt.show()
 
